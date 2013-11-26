@@ -13,9 +13,10 @@
 		<activity android:name=".app.ServerInfo" />
 		<activity android:name=".app.ChannelList" android:launchMode="singleTask" />
 		<activity android:name=".app.ChatActivity" />
-		<service android:enabled="true" android:name=".service.MumbleService" />
+		<service android:enabled="true" android:name=".service.MumbleService"
+            android:exported="true" />
 	</application>
-	<uses-sdk android:targetSdkVersion="8" android:minSdkVersion="3" />
+	<uses-sdk android:targetSdkVersion="18" android:minSdkVersion="5" />
 	<uses-permission android:name="android.permission.RECORD_AUDIO" />
 	<uses-permission android:name="android.permission.INTERNET" />
 	<uses-feature android:name="android.hardware.microphone" />

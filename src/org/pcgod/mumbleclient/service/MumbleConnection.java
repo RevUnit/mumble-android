@@ -1,5 +1,17 @@
 package org.pcgod.mumbleclient.service;
 
+import android.util.Log;
+
+import com.google.protobuf.MessageLite;
+
+import junit.framework.Assert;
+
+import net.sf.mumble.MumbleProto.Authenticate;
+import net.sf.mumble.MumbleProto.Version;
+
+import org.pcgod.mumbleclient.Globals;
+import org.pcgod.mumbleclient.service.MumbleProtocol.MessageType;
+
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -17,17 +29,6 @@ import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLSocket;
 import javax.net.ssl.SSLSocketFactory;
 import javax.net.ssl.TrustManager;
-
-import junit.framework.Assert;
-import net.sf.mumble.MumbleProto.Authenticate;
-import net.sf.mumble.MumbleProto.Version;
-
-import org.pcgod.mumbleclient.Globals;
-import org.pcgod.mumbleclient.service.MumbleProtocol.MessageType;
-
-import android.util.Log;
-
-import com.google.protobuf.MessageLite;
 
 /**
  * Maintains connection to the server and implements the low level communication
@@ -47,6 +48,9 @@ import com.google.protobuf.MessageLite;
  * @author pcgod
  */
 public class MumbleConnection implements Runnable {
+
+    public static final String TAG = "MumbleConnection";
+
 	/**
 	 * Socket reader for the TCP socket. Interprets the Mumble TCP envelope and
 	 * extracts the data inside.
@@ -71,7 +75,7 @@ public class MumbleConnection implements Runnable {
 			try {
 				tcpSocket.close();
 			} catch (final IOException e) {
-				Log.e(Globals.LOG_TAG, "Error when closing tcp socket", e);
+				Log.e(TAG, "Error when closing tcp socket", e);
 			}
 			super.stop();
 		}

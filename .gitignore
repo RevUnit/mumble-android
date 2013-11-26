@@ -1,2 +1,6 @@
 bin/*
 libs/*
+build/*
+obj/*
+out/*
+gen/*
