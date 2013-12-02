@@ -246,6 +246,23 @@ public class MumbleService extends Service {
         }
     }
 
+    public void muteUser(final User user, boolean muted) {
+        if (users.contains(user)) {
+            user.setMuted(muted);
+        }
+    }
+
+    public void muteAll() {
+        // TODO: mute all users
+        for (User u : users) {
+            muteUser(u, true);
+        }
+    }
+
+    public void deafenUser(boolean deafen) {
+
+    }
+
     public void unregisterObserver(final IServiceObserver observer) {
         observers.remove(observer);
     }
