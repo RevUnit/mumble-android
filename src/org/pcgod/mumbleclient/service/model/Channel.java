@@ -31,6 +31,12 @@ public class Channel implements Parcelable {
 	public Channel() {
 	}
 
+    public Channel(int id, String name) {
+        this.name = name;
+        this.id = id;
+        userCount = 0;
+    }
+
 	public Channel(final Parcel parcel) {
 		readFromParcel(parcel);
 	}

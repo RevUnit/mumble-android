@@ -12,6 +12,8 @@ import android.util.Log;
 
 import junit.framework.Assert;
 
+import net.sf.mumble.MumbleProto;
+
 import org.pcgod.mumbleclient.R;
 import org.pcgod.mumbleclient.app.ChannelList;
 import org.pcgod.mumbleclient.service.audio.AudioOutputHost;
@@ -19,9 +21,11 @@ import org.pcgod.mumbleclient.service.audio.RecordThread;
 import org.pcgod.mumbleclient.service.model.Channel;
 import org.pcgod.mumbleclient.service.model.Message;
 import org.pcgod.mumbleclient.service.model.User;
+import org.spongycastle.jce.provider.BouncyCastleProvider;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.security.Security;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedList;
@@ -39,7 +43,15 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class MumbleService extends Service {
 
+    static {
+        // For certificate
+        Security.insertProviderAt(new org.spongycastle.jce.provider.BouncyCastleProvider(), 1);
+    }
+
+
     public static final String TAG = "MumbleService";
+
+    private Object testLock;
 
 
     public static final int CONNECTION_STATE_DISCONNECTED = 0;
@@ -146,9 +158,9 @@ public class MumbleService extends Service {
             final Intent intent,
             final int flags,
             final int startId) {
+
         return handleCommand(intent);
     }
-
 
     public boolean canSpeak() {
         return mProtocol != null && mProtocol.canSpeak;
@@ -202,6 +214,10 @@ public class MumbleService extends Service {
         return Collections.unmodifiableList(users);
     }
 
+    public Handler getHandler() {
+        return handler;
+    }
+
     public boolean isConnected() {
         return serviceState == CONNECTION_STATE_CONNECTED;
     }
@@ -212,6 +228,36 @@ public class MumbleService extends Service {
 
     public void joinChannel(final int channelId) {
         mProtocol.joinChannel(channelId);
+    }
+
+    public void createChannel(Channel channel) {
+//        mProtocol.createChannel(channel);
+
+        /*        @Override
+        public void createChannel(int parent, String name, String description, int position, boolean temporary) throws RemoteException {
+            Mumble.ChannelState.Builder csb = Mumble.ChannelState.newBuilder();
+            csb.setParent(parent);
+            csb.setName(name);
+            csb.setDescription(description);
+            csb.setPosition(position);
+            csb.setTemporary(temporary);
+            mConnection.sendTCPMessage(csb.build(), JumbleTCPMessageType.ChannelState);
+        } */
+
+
+        MumbleProto.ChannelState.Builder csb = MumbleProto.ChannelState.newBuilder();
+
+        csb.setParent(1);
+        csb.setName("co-mumble test");
+        csb.setDescription("test channel");
+        csb.setPosition(3); // test value
+        csb.setTemporary(true);
+
+        Log.d(TAG, "creating channel");
+
+        mClient.sendTcpMessage(MumbleProtocol.MessageType.ChannelState, csb);
+
+
     }
 
     public void registerObserver(final IServiceObserver observer) {
@@ -260,7 +306,7 @@ public class MumbleService extends Service {
     }
 
     public void deafenUser(boolean deafen) {
-
+        Log.d(TAG, "MumbleService:deafenUser");
     }
 
     public void unregisterObserver(final IServiceObserver observer) {
@@ -275,6 +321,8 @@ public class MumbleService extends Service {
                 Log.e(TAG, "Failed to update connection state", e);
             }
         }
+
+        Log.d(TAG, "Number of observers: " + observers.size());
 
         Log.i(TAG, "MumbleService: Connection state changed to " +
                 CONNECTION_STATE_NAMES[serviceState]);
@@ -485,7 +533,6 @@ public class MumbleService extends Service {
         }
     }
 
-
     public class LocalBinder extends Binder {
         public MumbleService getService() {
             return MumbleService.this;
@@ -597,6 +644,7 @@ public class MumbleService extends Service {
                 @Override
                 public void process() {
                     channels.add(channel);
+                    Log.d(TAG, ".ServiceProtocolHost.ServiceProtocolMessage: channel added = " + channel.toString());
                 }
 
                 @Override

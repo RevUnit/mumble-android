@@ -1,8 +1,12 @@
 package org.pcgod.mumbleclient.service.model;
 
-import junit.framework.Assert;
 import android.os.Parcel;
 import android.os.Parcelable;
+import android.util.Log;
+
+import junit.framework.Assert;
+
+import org.pcgod.mumbleclient.Globals;
 
 public class User implements Parcelable {
 	public static final Parcelable.Creator<User> CREATOR = new Creator<User>() {
@@ -80,6 +84,23 @@ public class User implements Parcelable {
 		this.channel = newChannel;
 		this.channel.userCount++;
 	}
+
+    public boolean getMuted() {
+        return muted;
+    }
+
+    public void setMuted(boolean mute) {
+        Log.d(Globals.LOG_TAG, "User(" + name + "):setMuted(" + mute + ")");
+        this.muted = mute;
+    }
+
+    public void setDeafened(boolean deafened) {
+        this.deafened = deafened;
+    }
+
+    public boolean getDeafened() {
+        return deafened;
+    }
 
 	@Override
 	public final String toString() {
