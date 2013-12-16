@@ -21,7 +21,6 @@ import org.pcgod.mumbleclient.service.audio.RecordThread;
 import org.pcgod.mumbleclient.service.model.Channel;
 import org.pcgod.mumbleclient.service.model.Message;
 import org.pcgod.mumbleclient.service.model.User;
-import org.spongycastle.jce.provider.BouncyCastleProvider;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -42,12 +41,6 @@ import java.util.concurrent.ConcurrentHashMap;
  * @author Rantanen
  */
 public class MumbleService extends Service {
-
-    static {
-        // For certificate
-        Security.insertProviderAt(new org.spongycastle.jce.provider.BouncyCastleProvider(), 1);
-    }
-
 
     public static final String TAG = "MumbleService";
 

@@ -1,10 +1,14 @@
 package org.pcgod.mumbleclient.service;
 
-import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
+import android.content.Context;
+import android.os.AsyncTask;
+import android.util.Log;
+
+import com.google.protobuf.ByteString;
 
 import junit.framework.Assert;
+
+import net.sf.mumble.MumbleProto;
 import net.sf.mumble.MumbleProto.ChannelRemove;
 import net.sf.mumble.MumbleProto.ChannelState;
 import net.sf.mumble.MumbleProto.CodecVersion;
@@ -21,440 +25,605 @@ import org.pcgod.mumbleclient.service.audio.AudioOutputHost;
 import org.pcgod.mumbleclient.service.model.Channel;
 import org.pcgod.mumbleclient.service.model.Message;
 import org.pcgod.mumbleclient.service.model.User;
+import org.spongycastle.asn1.x500.X500Name;
+import org.spongycastle.asn1.x509.SubjectPublicKeyInfo;
+import org.spongycastle.cert.X509CertificateHolder;
+import org.spongycastle.cert.X509v3CertificateBuilder;
+import org.spongycastle.cert.jcajce.JcaX509CertificateConverter;
+import org.spongycastle.jce.provider.BouncyCastleProvider;
+import org.spongycastle.operator.ContentSigner;
+import org.spongycastle.operator.OperatorCreationException;
+import org.spongycastle.operator.jcajce.JcaContentSignerBuilder;
 
-import android.content.Context;
-import android.util.Log;
-
-import com.google.protobuf.ByteString;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.math.BigInteger;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.KeyStore;
+import java.security.KeyStoreException;
+import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
+import java.security.Security;
+import java.security.cert.CertificateException;
+import java.security.cert.X509Certificate;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
 
 public class MumbleProtocol {
-	public enum MessageType {
-		Version, UDPTunnel, Authenticate, Ping, Reject, ServerSync, ChannelRemove, ChannelState, UserRemove, UserState, BanList, TextMessage, PermissionDenied, ACL, QueryUsers, CryptSetup, ContextActionAdd, ContextAction, UserList, VoiceTarget, PermissionQuery, CodecVersion, UserStats, RequestBlob, ServerConfig
-	}
 
-	public static final int UDPMESSAGETYPE_UDPVOICECELTALPHA = 0;
-	public static final int UDPMESSAGETYPE_UDPPING = 1;
-	public static final int UDPMESSAGETYPE_UDPVOICESPEEX = 2;
-	public static final int UDPMESSAGETYPE_UDPVOICECELTBETA = 3;
+    static {
+        Security.insertProviderAt(new BouncyCastleProvider(), 1);
+    }
 
-	public static final int CODEC_NOCODEC = -1;
-	public static final int CODEC_ALPHA = UDPMESSAGETYPE_UDPVOICECELTALPHA;
-	public static final int CODEC_BETA = UDPMESSAGETYPE_UDPVOICECELTBETA;
 
-	public static final int SAMPLE_RATE = 48000;
-	public static final int FRAME_SIZE = SAMPLE_RATE / 100;
+    public enum MessageType {
+        Version, UDPTunnel, Authenticate, Ping, Reject, ServerSync, ChannelRemove, ChannelState, UserRemove, UserState, BanList, TextMessage, PermissionDenied, ACL, QueryUsers, CryptSetup, ContextActionAdd, ContextAction, UserList, VoiceTarget, PermissionQuery, CodecVersion, UserStats, RequestBlob, ServerConfig
+    }
 
-	/**
-	 * The time window during which the last successful UDP ping must have been
-	 * transmitted. If the time since the last successful UDP ping is greater
-	 * than this treshold the connection falls back on TCP tunneling.
-	 *
-	 * NOTE: This is the time when the last successfully received ping was SENT
-	 * by the client.
-	 *
-	 * 6000 gives 1 second reply-time as the ping interval is 5000 seconds
-	 * currently.
-	 */
-	public static final int UDP_PING_TRESHOLD = 6000;
+    public static final String CERTIFICATE = "overwatch-android-certificate";
 
-	private static final MessageType[] MT_CONSTANTS = MessageType.class.getEnumConstants();
+    public static final int UDPMESSAGETYPE_UDPVOICECELTALPHA = 0;
+    public static final int UDPMESSAGETYPE_UDPPING = 1;
+    public static final int UDPMESSAGETYPE_UDPVOICESPEEX = 2;
+    public static final int UDPMESSAGETYPE_UDPVOICECELTBETA = 3;
 
-	public Map<Integer, Channel> channels = new HashMap<Integer, Channel>();
-	public Map<Integer, User> users = new HashMap<Integer, User>();
-	public Channel currentChannel = null;
-	public User currentUser = null;
-	public boolean canSpeak = true;
-	public int codec = CODEC_NOCODEC;
-	private final AudioOutputHost audioHost;
-	private final Context ctx;
+    public static final int CODEC_NOCODEC = -1;
+    public static final int CODEC_ALPHA = UDPMESSAGETYPE_UDPVOICECELTALPHA;
+    public static final int CODEC_BETA = UDPMESSAGETYPE_UDPVOICECELTBETA;
 
-	private AudioOutput ao;
-	private Thread audioOutputThread;
-	private Thread pingThread;
+    public static final int SAMPLE_RATE = 48000;
+    public static final int FRAME_SIZE = SAMPLE_RATE / 100;
 
-	private final MumbleProtocolHost host;
-	private final MumbleConnection conn;
+    /**
+     * The time window during which the last successful UDP ping must have been
+     * transmitted. If the time since the last successful UDP ping is greater
+     * than this treshold the connection falls back on TCP tunneling.
+     * <p/>
+     * NOTE: This is the time when the last successfully received ping was SENT
+     * by the client.
+     * <p/>
+     * 6000 gives 1 second reply-time as the ping interval is 5000 seconds
+     * currently.
+     */
+    public static final int UDP_PING_TRESHOLD = 6000;
 
-	private boolean stopped = false;
+    private static final MessageType[] MT_CONSTANTS = MessageType.class.getEnumConstants();
 
-	public MumbleProtocol(
-		final MumbleProtocolHost host,
-		final AudioOutputHost audioHost,
-		final MumbleConnection connection,
-		final Context ctx) {
-		this.host = host;
-		this.audioHost = audioHost;
-		this.conn = connection;
-		this.ctx = ctx;
+    public Map<Integer, Channel> channels = new HashMap<Integer, Channel>();
+    public Map<Integer, User> users = new HashMap<Integer, User>();
+    public Channel currentChannel = null;
+    public User currentUser = null;
+    public boolean canSpeak = true;
+    public int codec = CODEC_NOCODEC;
+    private final AudioOutputHost audioHost;
+    private final Context ctx;
 
-		this.host.setSynchronized(false);
-	}
+    private AudioOutput ao;
+    private Thread audioOutputThread;
+    private Thread pingThread;
 
-	public final void joinChannel(final int channelId) {
-		final UserState.Builder us = UserState.newBuilder();
-		us.setSession(currentUser.session);
-		us.setChannelId(channelId);
-		conn.sendTcpMessage(MessageType.UserState, us);
-	}
+    private final MumbleProtocolHost host;
+    private final MumbleConnection conn;
 
-	public void processTcp(final short type, final byte[] buffer)
-		throws IOException {
-		if (stopped) {
-			return;
-		}
+    private boolean stopped = false;
+    private boolean hasCert = false;
 
-		final MessageType t = MT_CONSTANTS[type];
+    public MumbleProtocol(
+            final MumbleProtocolHost host,
+            final AudioOutputHost audioHost,
+            final MumbleConnection connection,
+            final Context ctx) {
+        this.host = host;
+        this.audioHost = audioHost;
+        this.conn = connection;
+        this.ctx = ctx;
 
-		Channel channel;
-		User user;
+        this.host.setSynchronized(false);
+    }
 
-		switch (t) {
-		case UDPTunnel:
-			processUdp(buffer, buffer.length);
-			break;
-		case Ping:
-			// ignore
-			break;
-		case CodecVersion:
-			final boolean oldCanSpeak = canSpeak;
-			final CodecVersion codecVersion = CodecVersion.parseFrom(buffer);
-			codec = CODEC_NOCODEC;
-			if (codecVersion.hasAlpha() &&
-				codecVersion.getAlpha() == Globals.CELT_VERSION) {
-				codec = CODEC_ALPHA;
-			} else if (codecVersion.hasBeta() &&
-					   codecVersion.getBeta() == Globals.CELT_VERSION) {
-				codec = CODEC_BETA;
-			}
-			canSpeak = canSpeak && (codec != CODEC_NOCODEC);
+    public final void joinChannel(final int channelId) {
+        final UserState.Builder us = UserState.newBuilder();
+        us.setSession(currentUser.session);
+        us.setChannelId(channelId);
+        conn.sendTcpMessage(MessageType.UserState, us);
+    }
 
-			if (canSpeak != oldCanSpeak) {
-				host.currentUserUpdated();
-			}
+    public void processTcp(final short type, final byte[] buffer)
+            throws IOException {
+        if (stopped) {
+            return;
+        }
 
-			break;
-		case Reject:
-			final Reject reject = Reject.parseFrom(buffer);
-			final String errorString = String.format(
-				"Connection rejected: %s",
-				reject.getReason());
-			host.setError(errorString);
-			Log.e(Globals.LOG_TAG, String.format(
-				"Received Reject message: %s",
-				reject.getReason()));
-			break;
-		case ServerSync:
-			final ServerSync ss = ServerSync.parseFrom(buffer);
+        final MessageType t = MT_CONSTANTS[type];
 
-			// We do some things that depend on being executed only once here
-			// so for now assert that there won't be multiple ServerSyncs.
-			Assert.assertNull("A second ServerSync received.", currentUser);
+        Channel channel;
+        User user;
 
-			currentUser = findUser(ss.getSession());
-			currentUser.isCurrent = true;
-			currentChannel = currentUser.getChannel();
+        switch (t) {
+            case UDPTunnel:
+                processUdp(buffer, buffer.length);
+                break;
+            case Ping:
+                // ignore
+                break;
+            case CodecVersion:
+                final boolean oldCanSpeak = canSpeak;
+                final CodecVersion codecVersion = CodecVersion.parseFrom(buffer);
+                codec = CODEC_NOCODEC;
+                if (codecVersion.hasAlpha() &&
+                        codecVersion.getAlpha() == Globals.CELT_VERSION) {
+                    codec = CODEC_ALPHA;
+                } else if (codecVersion.hasBeta() &&
+                        codecVersion.getBeta() == Globals.CELT_VERSION) {
+                    codec = CODEC_BETA;
+                }
+                canSpeak = canSpeak && (codec != CODEC_NOCODEC);
 
-			pingThread = new Thread(new PingThread(conn), "Ping");
-			pingThread.start();
-			Log.d(Globals.LOG_TAG, ">>> " + t);
+                if (canSpeak != oldCanSpeak) {
+                    host.currentUserUpdated();
+                }
 
-			ao = new AudioOutput(ctx, audioHost);
-			audioOutputThread = new Thread(ao, "audio output");
-			audioOutputThread.start();
+                break;
+            case Reject:
+                final Reject reject = Reject.parseFrom(buffer);
+                final String errorString = String.format(
+                        "Connection rejected: %s",
+                        reject.getReason());
+                host.setError(errorString);
+                Log.e(Globals.LOG_TAG, String.format(
+                        "Received Reject message: %s",
+                        reject.getReason()));
+                break;
+            case ServerSync:
+                final ServerSync ss = ServerSync.parseFrom(buffer);
 
-			final UserState.Builder usb = UserState.newBuilder();
-			usb.setSession(currentUser.session);
-			conn.sendTcpMessage(MessageType.UserState, usb);
+                // We do some things that depend on being executed only once here
+                // so for now assert that there won't be multiple ServerSyncs.
+                Assert.assertNull("A second ServerSync received.", currentUser);
 
-			host.setSynchronized(true);
+                currentUser = findUser(ss.getSession());
+                currentUser.isCurrent = true;
+                currentChannel = currentUser.getChannel();
 
-			host.currentChannelChanged();
-			host.currentUserUpdated();
-			break;
-		case ChannelState:
-			final ChannelState cs = ChannelState.parseFrom(buffer);
-			channel = findChannel(cs.getChannelId());
-			if (channel != null) {
-				if (cs.hasName()) {
-					channel.name = cs.getName();
-				}
-				host.channelUpdated(channel);
-				break;
-			}
+                pingThread = new Thread(new PingThread(conn), "Ping");
+                pingThread.start();
+                Log.d(Globals.LOG_TAG, ">>> " + t);
 
-			// New channel
-			channel = new Channel();
-			channel.id = cs.getChannelId();
-			channel.name = cs.getName();
-			channels.put(channel.id, channel);
-			host.channelAdded(channel);
-			break;
-		case ChannelRemove:
-			final ChannelRemove cr = ChannelRemove.parseFrom(buffer);
-			channel = findChannel(cr.getChannelId());
-			channel.removed = true;
-			channels.remove(channel.id);
-			host.channelRemoved(channel.id);
-			break;
-		case UserState:
-			final UserState us = UserState.parseFrom(buffer);
-			user = findUser(us.getSession());
+                ao = new AudioOutput(ctx, audioHost);
+                audioOutputThread = new Thread(ao, "audio output");
+                audioOutputThread.start();
 
-			boolean added = false;
-			boolean currentUserUpdated = false;
-			boolean channelUpdated = false;
+                final UserState.Builder usb = UserState.newBuilder();
+                usb.setSession(currentUser.session);
+                conn.sendTcpMessage(MessageType.UserState, usb);
 
-			if (user == null) {
-				user = new User();
-				user.session = us.getSession();
-				users.put(user.session, user);
-				added = true;
-			}
+                host.setSynchronized(true);
 
-			if (us.hasSelfDeaf() || us.hasSelfMute()) {
-				if (us.getSelfDeaf()) {
-					user.userState = User.USERSTATE_DEAFENED;
-				} else if (us.getSelfMute()) {
-					user.userState = User.USERSTATE_MUTED;
-				} else {
-					user.userState = User.USERSTATE_NONE;
-				}
-			}
+                host.currentChannelChanged();
+                host.currentUserUpdated();
+                break;
+            case ChannelState:
+                final ChannelState cs = ChannelState.parseFrom(buffer);
+                channel = findChannel(cs.getChannelId());
+                if (channel != null) {
+                    if (cs.hasName()) {
+                        channel.name = cs.getName();
+                    }
+                    host.channelUpdated(channel);
+                    break;
+                }
 
-			if (us.hasMute()) {
-				user.muted = us.getMute();
-				user.userState = user.muted ? User.USERSTATE_MUTED
-					: User.USERSTATE_NONE;
-			}
+                // New channel
+                channel = new Channel();
+                channel.id = cs.getChannelId();
+                channel.name = cs.getName();
+                channels.put(channel.id, channel);
+                host.channelAdded(channel);
+                break;
+            case ChannelRemove:
+                final ChannelRemove cr = ChannelRemove.parseFrom(buffer);
+                channel = findChannel(cr.getChannelId());
+                channel.removed = true;
+                channels.remove(channel.id);
+                host.channelRemoved(channel.id);
+                break;
+            case UserState:
+                final UserState us = UserState.parseFrom(buffer);
+                user = findUser(us.getSession());
 
-			if (us.hasDeaf()) {
-				user.deafened = us.getDeaf();
-				user.muted |= user.deafened;
-				user.userState = user.deafened ? User.USERSTATE_DEAFENED
-					: (user.muted ? User.USERSTATE_MUTED : User.USERSTATE_NONE);
-			}
+                boolean added = false;
+                boolean currentUserUpdated = false;
+                boolean channelUpdated = false;
 
-			if (us.hasSuppress()) {
-				user.userState = us.getSuppress() ? User.USERSTATE_MUTED
-					: User.USERSTATE_NONE;
-			}
+                if (user == null) {
+                    user = new User();
+                    user.session = us.getSession();
+                    users.put(user.session, user);
+                    added = true;
+                }
 
-			if (us.hasName()) {
-				user.name = us.getName();
-			}
+                if (us.hasSelfDeaf() || us.hasSelfMute()) {
+                    if (us.getSelfDeaf()) {
+                        user.userState = User.USERSTATE_DEAFENED;
+                    } else if (us.getSelfMute()) {
+                        user.userState = User.USERSTATE_MUTED;
+                    } else {
+                        user.userState = User.USERSTATE_NONE;
+                    }
+                }
 
-			if (added || us.hasChannelId()) {
-				user.setChannel(channels.get(us.getChannelId()));
-				channelUpdated = true;
-			}
+                if (us.hasMute()) {
+                    user.muted = us.getMute();
+                    user.userState = user.muted ? User.USERSTATE_MUTED
+                            : User.USERSTATE_NONE;
+                }
 
-			// If this is the current user, do extra updates on local state.
-			if (currentUser != null && us.getSession() == currentUser.session) {
-				if (us.hasMute() || us.hasSuppress()) {
-					// TODO: Check the logic
-					// Currently Mute+Suppress true -> Either of them false results
-					// in canSpeak = true
-					if (us.hasMute()) {
-						canSpeak = (codec != CODEC_NOCODEC) && !us.getMute();
-					}
-					if (us.hasSuppress()) {
-						canSpeak = (codec != CODEC_NOCODEC) &&
-								   !us.getSuppress();
-					}
-				}
+                if (us.hasDeaf()) {
+                    user.deafened = us.getDeaf();
+                    user.muted |= user.deafened;
+                    user.userState = user.deafened ? User.USERSTATE_DEAFENED
+                            : (user.muted ? User.USERSTATE_MUTED : User.USERSTATE_NONE);
+                }
 
-				currentUserUpdated = true;
-			}
+                if (us.hasSuppress()) {
+                    user.userState = us.getSuppress() ? User.USERSTATE_MUTED
+                            : User.USERSTATE_NONE;
+                }
 
-			if (channelUpdated) {
-				host.channelUpdated(user.getChannel());
-			}
+                if (us.hasName()) {
+                    user.name = us.getName();
+                }
 
-			if (added) {
-				host.userAdded(user);
-			} else {
-				host.userUpdated(user);
-			}
+                if (added || us.hasChannelId()) {
+                    user.setChannel(channels.get(us.getChannelId()));
+                    channelUpdated = true;
+                }
 
-			if (currentUserUpdated) {
-				host.currentUserUpdated();
-			}
-			if (currentUserUpdated && channelUpdated) {
-				currentChannel = user.getChannel();
-				host.currentChannelChanged();
-			}
-			break;
-		case UserRemove:
-			final UserRemove ur = UserRemove.parseFrom(buffer);
-			user = findUser(ur.getSession());
-			users.remove(user.session);
+                // If this is the current user, do extra updates on local state.
+                if (currentUser != null && us.getSession() == currentUser.session) {
+                    if (us.hasMute() || us.hasSuppress()) {
+                        // TODO: Check the logic
+                        // Currently Mute+Suppress true -> Either of them false results
+                        // in canSpeak = true
+                        if (us.hasMute()) {
+                            canSpeak = (codec != CODEC_NOCODEC) && !us.getMute();
+                        }
+                        if (us.hasSuppress()) {
+                            canSpeak = (codec != CODEC_NOCODEC) &&
+                                    !us.getSuppress();
+                        }
+                    }
 
-			// Remove the user from the channel as well.
-			user.getChannel().userCount--;
+                    currentUserUpdated = true;
+                }
 
-			host.channelUpdated(user.getChannel());
-			host.userRemoved(user.session);
-			break;
-		case TextMessage:
-			handleTextMessage(TextMessage.parseFrom(buffer));
-			break;
-		case CryptSetup:
-			final CryptSetup cryptsetup = CryptSetup.parseFrom(buffer);
+                if (channelUpdated) {
+                    host.channelUpdated(user.getChannel());
+                }
 
-			Log.d(Globals.LOG_TAG, "MumbleConnection: CryptSetup");
+                if (added) {
+                    host.userAdded(user);
+                } else {
+                    host.userUpdated(user);
+                }
 
-			if (cryptsetup.hasKey() && cryptsetup.hasClientNonce() &&
-				cryptsetup.hasServerNonce()) {
-				// Full key setup
-				conn.cryptState.setKeys(
-					cryptsetup.getKey().toByteArray(),
-					cryptsetup.getClientNonce().toByteArray(),
-					cryptsetup.getServerNonce().toByteArray());
-			} else if (cryptsetup.hasServerNonce()) {
-				// Server syncing its nonce to us.
-				Log.d(Globals.LOG_TAG, "MumbleConnection: Server sending nonce");
-				conn.cryptState.setServerNonce(cryptsetup.getServerNonce().toByteArray());
-			} else {
-				// Server wants our nonce.
-				Log.d(
-					Globals.LOG_TAG,
-					"MumbleConnection: Server requesting nonce");
-				final CryptSetup.Builder nonceBuilder = CryptSetup.newBuilder();
-				nonceBuilder.setClientNonce(ByteString.copyFrom(conn.cryptState.getClientNonce()));
-				conn.sendTcpMessage(MessageType.CryptSetup, nonceBuilder);
-			}
-			break;
-		default:
-			Log.w(Globals.LOG_TAG, "unhandled message type " + t);
-		}
-	}
+                if (currentUserUpdated) {
+                    host.currentUserUpdated();
+                }
+                if (currentUserUpdated && channelUpdated) {
+                    currentChannel = user.getChannel();
+                    host.currentChannelChanged();
+                }
+                break;
+            case UserRemove:
+                final UserRemove ur = UserRemove.parseFrom(buffer);
+                user = findUser(ur.getSession());
+                users.remove(user.session);
 
-	public void processUdp(final byte[] buffer, final int length) {
-		if (stopped) {
-			return;
-		}
+                // Remove the user from the channel as well.
+                user.getChannel().userCount--;
 
-		final int type = buffer[0] >> 5 & 0x7;
-		if (type == UDPMESSAGETYPE_UDPPING) {
-			final long timestamp = ((long) (buffer[1] & 0xFF) << 56) |
-								   ((long) (buffer[2] & 0xFF) << 48) |
-								   ((long) (buffer[3] & 0xFF) << 40) |
-								   ((long) (buffer[4] & 0xFF) << 32) |
-								   ((long) (buffer[5] & 0xFF) << 24) |
-								   ((long) (buffer[6] & 0xFF) << 16) |
-								   ((long) (buffer[7] & 0xFF) << 8) |
-								   ((buffer[8] & 0xFF));
+                host.channelUpdated(user.getChannel());
+                host.userRemoved(user.session);
+                break;
+            case TextMessage:
+                handleTextMessage(TextMessage.parseFrom(buffer));
+                break;
+            case CryptSetup:
+                final CryptSetup cryptsetup = CryptSetup.parseFrom(buffer);
 
-			conn.refreshUdpLimit(timestamp + UDP_PING_TRESHOLD);
-		} else {
-			processVoicePacket(buffer);
-		}
-	}
+                Log.d(Globals.LOG_TAG, "MumbleConnection: CryptSetup");
 
-	public final void sendChannelTextMessage(
-		final String message,
-		final Channel channel) {
-		final TextMessage.Builder tmb = TextMessage.newBuilder();
-		tmb.addChannelId(channel.id);
-		tmb.setMessage(message);
-		conn.sendTcpMessage(MessageType.TextMessage, tmb);
+                if (cryptsetup.hasKey() && cryptsetup.hasClientNonce() &&
+                        cryptsetup.hasServerNonce()) {
+                    // Full key setup
+                    conn.cryptState.setKeys(
+                            cryptsetup.getKey().toByteArray(),
+                            cryptsetup.getClientNonce().toByteArray(),
+                            cryptsetup.getServerNonce().toByteArray());
+                } else if (cryptsetup.hasServerNonce()) {
+                    // Server syncing its nonce to us.
+                    Log.d(Globals.LOG_TAG, "MumbleConnection: Server sending nonce");
+                    conn.cryptState.setServerNonce(cryptsetup.getServerNonce().toByteArray());
+                } else {
+                    // Server wants our nonce.
+                    Log.d(
+                            Globals.LOG_TAG,
+                            "MumbleConnection: Server requesting nonce");
+                    final CryptSetup.Builder nonceBuilder = CryptSetup.newBuilder();
+                    nonceBuilder.setClientNonce(ByteString.copyFrom(conn.cryptState.getClientNonce()));
+                    conn.sendTcpMessage(MessageType.CryptSetup, nonceBuilder);
+                }
+                break;
 
-		final Message msg = new Message();
-		msg.timestamp = System.currentTimeMillis();
-		msg.message = message;
-		msg.channel = channel;
-		msg.direction = Message.DIRECTION_SENT;
-		host.messageSent(msg);
-	}
+            case PermissionDenied:
 
-	public void stop() {
-		stopped = true;
-		stopThreads();
-	}
+                MumbleProto.PermissionDenied pd = MumbleProto.PermissionDenied.parseFrom(buffer);
 
-	private Channel findChannel(final int id) {
-		return channels.get(id);
-	}
+                Log.d("MumbleProtocol", "Permission Denied");
 
-	private User findUser(final int session_) {
-		return users.get(session_);
-	}
+                Log.d("MumbleProtocol", "Type=" + pd.getType());
 
-	private void handleTextMessage(final TextMessage ts) {
-		User u = null;
-		if (ts.hasActor()) {
-			u = findUser(ts.getActor());
-		}
+                if (pd.getType().equals(MumbleProto.PermissionDenied.DenyType.MissingCertificate)) {
+                    // generate certificate
+                    FileInputStream fis = ctx.openFileInput(CERTIFICATE);
 
-		final Message msg = new Message();
-		msg.timestamp = System.currentTimeMillis();
-		msg.message = ts.getMessage();
-		msg.actor = u;
-		msg.direction = Message.DIRECTION_RECEIVED;
-		msg.channelIds = ts.getChannelIdCount();
-		msg.treeIds = ts.getTreeIdCount();
-		host.messageReceived(msg);
-	}
+                    byte[] certificate = new byte[fis.available()];
 
-	private void processVoicePacket(final byte[] buffer) {
-		final int type = buffer[0] >> 5 & 0x7;
-		final int flags = buffer[0] & 0x1f;
+                    try {
+                        fis.read(certificate);
 
-		// There is no speex support...
-		if (type != UDPMESSAGETYPE_UDPVOICECELTALPHA &&
-			type != UDPMESSAGETYPE_UDPVOICECELTBETA) {
-			return;
-		}
+                        fis.close();
 
-		// Don't try to decode the unsupported codec version.
-		if (type != codec) {
-			return;
-		}
+                        hasCert = true;
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    } finally {
+                        if (fis != null) {
+                            try {
+                                fis.close();
+                            } catch (IOException e) {
+                                e.printStackTrace();
+                            }
+                        }
+                    }
 
-		final PacketDataStream pds = new PacketDataStream(buffer);
-		// skip type / flags
-		pds.skip(1);
-		final long uiSession = pds.readLong();
+                    if (!hasCert) {
+                        new CertificateThread().execute();
+                    }
+                }
 
-		final User u = findUser((int) uiSession);
-		if (u == null) {
-			Log.e(Globals.LOG_TAG, "User session " + uiSession + " not found!");
 
-			// This might happen if user leaves while there are still UDP packets
-			// en route to the clients. In this case we should just ignore these
-			// packets.
-			return;
-		}
+                break;
+            default:
+                Log.w(Globals.LOG_TAG, "unhandled message type " + t);
+        }
+    }
 
-		// Rewind the packet. Otherwise consumers are confusing to implement.
-		pds.rewind();
-		ao.addFrameToBuffer(u, pds, flags);
-	}
+    public void processUdp(final byte[] buffer, final int length) {
+        if (stopped) {
+            return;
+        }
 
-	private void stopThreads() {
-		if (ao != null) {
-			ao.stop();
-			try {
-				audioOutputThread.join();
-			} catch (final InterruptedException e) {
-				Log.e(
-					Globals.LOG_TAG,
-					"Interrupted while waiting for audio thread to end",
-					e);
-			}
-		}
+        final int type = buffer[0] >> 5 & 0x7;
+        if (type == UDPMESSAGETYPE_UDPPING) {
+            final long timestamp = ((long) (buffer[1] & 0xFF) << 56) |
+                    ((long) (buffer[2] & 0xFF) << 48) |
+                    ((long) (buffer[3] & 0xFF) << 40) |
+                    ((long) (buffer[4] & 0xFF) << 32) |
+                    ((long) (buffer[5] & 0xFF) << 24) |
+                    ((long) (buffer[6] & 0xFF) << 16) |
+                    ((long) (buffer[7] & 0xFF) << 8) |
+                    ((buffer[8] & 0xFF));
 
-		if (pingThread != null) {
-			pingThread.interrupt();
-			try {
-				pingThread.join();
-			} catch (final InterruptedException e) {
-				Log.e(
-					Globals.LOG_TAG,
-					"Interrupted while waiting for ping thread to end",
-					e);
-			}
-		}
-	}
+            conn.refreshUdpLimit(timestamp + UDP_PING_TRESHOLD);
+        } else {
+            processVoicePacket(buffer);
+        }
+    }
 
+    public final void sendChannelTextMessage(
+            final String message,
+            final Channel channel) {
+        final TextMessage.Builder tmb = TextMessage.newBuilder();
+        tmb.addChannelId(channel.id);
+        tmb.setMessage(message);
+        conn.sendTcpMessage(MessageType.TextMessage, tmb);
+
+        final Message msg = new Message();
+        msg.timestamp = System.currentTimeMillis();
+        msg.message = message;
+        msg.channel = channel;
+        msg.direction = Message.DIRECTION_SENT;
+        host.messageSent(msg);
+    }
+
+    public void stop() {
+        stopped = true;
+        stopThreads();
+    }
+
+    private Channel findChannel(final int id) {
+        return channels.get(id);
+    }
+
+    private User findUser(final int session_) {
+        return users.get(session_);
+    }
+
+    private void handleTextMessage(final TextMessage ts) {
+        User u = null;
+        if (ts.hasActor()) {
+            u = findUser(ts.getActor());
+        }
+
+        final Message msg = new Message();
+        msg.timestamp = System.currentTimeMillis();
+        msg.message = ts.getMessage();
+        msg.actor = u;
+        msg.direction = Message.DIRECTION_RECEIVED;
+        msg.channelIds = ts.getChannelIdCount();
+        msg.treeIds = ts.getTreeIdCount();
+        host.messageReceived(msg);
+    }
+
+    private void processVoicePacket(final byte[] buffer) {
+        final int type = buffer[0] >> 5 & 0x7;
+        final int flags = buffer[0] & 0x1f;
+
+        // There is no speex support...
+        if (type != UDPMESSAGETYPE_UDPVOICECELTALPHA &&
+                type != UDPMESSAGETYPE_UDPVOICECELTBETA) {
+            return;
+        }
+
+        // Don't try to decode the unsupported codec version.
+        if (type != codec) {
+            return;
+        }
+
+        final PacketDataStream pds = new PacketDataStream(buffer);
+        // skip type / flags
+        pds.skip(1);
+        final long uiSession = pds.readLong();
+
+        final User u = findUser((int) uiSession);
+        if (u == null) {
+            Log.e(Globals.LOG_TAG, "User session " + uiSession + " not found!");
+
+            // This might happen if user leaves while there are still UDP packets
+            // en route to the clients. In this case we should just ignore these
+            // packets.
+            return;
+        }
+
+        // Rewind the packet. Otherwise consumers are confusing to implement.
+        pds.rewind();
+        ao.addFrameToBuffer(u, pds, flags);
+    }
+
+    private void stopThreads() {
+        if (ao != null) {
+            ao.stop();
+            try {
+                audioOutputThread.join();
+            } catch (final InterruptedException e) {
+                Log.e(
+                        Globals.LOG_TAG,
+                        "Interrupted while waiting for audio thread to end",
+                        e);
+            }
+        }
+
+        if (pingThread != null) {
+            pingThread.interrupt();
+            try {
+                pingThread.join();
+            } catch (final InterruptedException e) {
+                Log.e(
+                        Globals.LOG_TAG,
+                        "Interrupted while waiting for ping thread to end",
+                        e);
+            }
+        }
+    }
+
+    private class CertificateThread extends AsyncTask<Void, Void, X509Certificate> {
+
+        private final String ISSUER = "CN=Overwatch Android";
+        private final Integer YEARS_VALID = 20;
+
+        @Override
+        protected X509Certificate doInBackground(Void... params) {
+
+            X509Certificate cert = null;
+
+            FileOutputStream out = null;
+
+            if (!hasCert) {
+
+                hasCert = true;
+
+                try {
+                    Log.d("Mumble: CertificateThread", "Creating Certificate");
+
+                    out = ctx.openFileOutput(CERTIFICATE, Context.MODE_PRIVATE);
+
+                    cert = generateCertificate(out);
+
+                    out.close();
+                } catch (FileNotFoundException e) {
+                    e.printStackTrace();
+                } catch (OperatorCreationException e) {
+                    e.printStackTrace();
+                } catch (CertificateException e) {
+                    e.printStackTrace();
+                } catch (NoSuchAlgorithmException e) {
+                    e.printStackTrace();
+                } catch (KeyStoreException e) {
+                    e.printStackTrace();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                } finally {
+                    if (out != null) {
+                        try {
+                            out.close();
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+                    }
+                }
+            } else {
+                Log.d("MumbleProtocol", "Certificate already created");
+            }
+
+            return cert;
+        }
+
+        @Override
+        public void onPostExecute(X509Certificate result) {
+            Log.d("MumbleProtocol", "Certificate created: ");
+            Log.d("MumbleProtocol", result.toString());
+        }
+
+        private X509Certificate generateCertificate(OutputStream out) throws NoSuchAlgorithmException, OperatorCreationException, CertificateException, KeyStoreException, IOException {
+
+            BouncyCastleProvider provider = new BouncyCastleProvider();
+            KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
+            generator.initialize(2048, new SecureRandom());
+
+            KeyPair keyPair = generator.generateKeyPair();
+
+            SubjectPublicKeyInfo publicKeyInfo = SubjectPublicKeyInfo.getInstance(keyPair.getPublic().getEncoded());
+            ContentSigner signer = new JcaContentSignerBuilder("SHA1withRSA").setProvider(provider).build(keyPair.getPrivate());
+
+            Date startDate = new Date();
+            Calendar calendar = Calendar.getInstance();
+            calendar.setTime(startDate);
+            calendar.add(Calendar.YEAR, YEARS_VALID);
+            Date endDate = calendar.getTime();
+
+            X509v3CertificateBuilder certBuilder = new X509v3CertificateBuilder(new X500Name(ISSUER),
+                    BigInteger.ONE, startDate, endDate, new X500Name(ISSUER),
+                    publicKeyInfo);
+
+            X509CertificateHolder certificateHolder = certBuilder.build(signer);
+
+            X509Certificate certificate = new JcaX509CertificateConverter().setProvider(provider).getCertificate(certificateHolder);
+
+            KeyStore keyStore = KeyStore.getInstance("PKCS12", provider);
+            keyStore.load(null, null);
+            keyStore.setKeyEntry("overwatch", keyPair.getPrivate(), null, new X509Certificate[]{certificate});
+
+            keyStore.store(out, "".toCharArray());
+
+            return certificate;
+        }
+    }
 }
