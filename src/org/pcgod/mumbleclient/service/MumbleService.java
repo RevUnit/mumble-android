@@ -43,9 +43,6 @@ public class MumbleService extends Service {
 
     public static final String TAG = "MumbleService";
 
-    private Object testLock;
-
-
     public static final int CONNECTION_STATE_DISCONNECTED = 0;
     public static final int CONNECTION_STATE_CONNECTING = 1;
     public static final int CONNECTION_STATE_SYNCHRONIZING = 2;
@@ -227,9 +224,9 @@ public class MumbleService extends Service {
         MumbleProto.ChannelState.Builder csb = MumbleProto.ChannelState.newBuilder();
 
         csb.setParent(0);
-        csb.setName("co-mumble test");
+        csb.setName(channel.name);
         csb.setDescription("test channel");
-        csb.setPosition(3); // test value
+        csb.setPosition(channel.id); // test value
         csb.setTemporary(true);
 
         Log.d(TAG, "creating channel");
@@ -622,7 +619,6 @@ public class MumbleService extends Service {
                 @Override
                 public void process() {
                     channels.add(channel);
-                    Log.d(TAG, ".ServiceProtocolHost.ServiceProtocolMessage: channel added = " + channel.toString());
                 }
 
                 @Override

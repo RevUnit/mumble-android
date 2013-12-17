@@ -172,6 +172,21 @@ public class MumbleProtocol {
         conn.sendTcpMessage(MessageType.UserState, us);
     }
 
+    public void createChannel(Channel channel) {
+
+        ChannelState.Builder csb = ChannelState.newBuilder();
+
+        csb.setParent(0);
+        csb.setName(channel.name);
+        csb.setDescription("test channel");
+        csb.setPosition(channel.id); // test value
+        csb.setTemporary(true);
+
+        Log.d("MumbleProtocol", "creating channel");
+
+        conn.sendTcpMessage(MumbleProtocol.MessageType.ChannelState, csb);
+    }
+
     public void processTcp(final short type, final byte[] buffer)
             throws IOException {
         if (stopped) {
@@ -410,6 +425,8 @@ public class MumbleProtocol {
 
                     case ChannelName:
                         Log.w("MumbleProtocol", "Permission denied: duplicate channel name");
+
+                        // attempt to join channel
                         break;
                     default:
 
