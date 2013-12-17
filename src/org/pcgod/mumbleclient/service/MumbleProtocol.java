@@ -111,6 +111,8 @@ public class MumbleProtocol {
     private final MumbleProtocolHost host;
     private final MumbleConnection conn;
 
+    private byte[] certificate;
+
     private boolean stopped = false;
     private boolean hasCert = false;
 
@@ -125,6 +127,42 @@ public class MumbleProtocol {
         this.ctx = ctx;
 
         this.host.setSynchronized(false);
+
+        try {
+            // generate certificate
+            Log.d("MumbleProtocol", "Retrieving certificate");
+            FileInputStream fis = ctx.openFileInput(CERTIFICATE);
+
+            certificate = new byte[fis.available()];
+
+            try {
+                fis.read(certificate);
+
+                fis.close();
+
+                hasCert = true;
+            } catch (IOException e) {
+                e.printStackTrace();
+            } finally {
+                if (fis != null) {
+                    try {
+                        fis.close();
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                }
+            }
+
+            if (!hasCert) {
+                new CertificateThread().execute();
+            }
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        conn.addCertificate(certificate, null);
     }
 
     public final void joinChannel(final int channelId) {
@@ -370,34 +408,34 @@ public class MumbleProtocol {
 
                 Log.d("MumbleProtocol", "Type=" + pd.getType());
 
-                if (pd.getType().equals(MumbleProto.PermissionDenied.DenyType.MissingCertificate)) {
-                    // generate certificate
-                    FileInputStream fis = ctx.openFileInput(CERTIFICATE);
-
-                    byte[] certificate = new byte[fis.available()];
-
-                    try {
-                        fis.read(certificate);
-
-                        fis.close();
-
-                        hasCert = true;
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    } finally {
-                        if (fis != null) {
-                            try {
-                                fis.close();
-                            } catch (IOException e) {
-                                e.printStackTrace();
-                            }
-                        }
-                    }
-
-                    if (!hasCert) {
-                        new CertificateThread().execute();
-                    }
-                }
+//                if (pd.getType().equals(MumbleProto.PermissionDenied.DenyType.MissingCertificate)) {
+//                    // generate certificate
+//                    FileInputStream fis = ctx.openFileInput(CERTIFICATE);
+//
+//                    certificate = new byte[fis.available()];
+//
+//                    try {
+//                        fis.read(certificate);
+//
+//                        fis.close();
+//
+//                        hasCert = true;
+//                    } catch (IOException e) {
+//                        e.printStackTrace();
+//                    } finally {
+//                        if (fis != null) {
+//                            try {
+//                                fis.close();
+//                            } catch (IOException e) {
+//                                e.printStackTrace();
+//                            }
+//                        }
+//                    }
+//
+//                    if (!hasCert) {
+//                        new CertificateThread().execute();
+//                    }
+//                }
 
 
                 break;
@@ -532,6 +570,17 @@ public class MumbleProtocol {
                         e);
             }
         }
+    }
+
+    public boolean hasCertificate() {
+        return hasCert;
+    }
+
+    public byte[] getCertificate() {
+        if (certificate.length == 0) {
+            Log.d("MumbleProtocol", "Certificate is null");
+        }
+        return certificate;
     }
 
     private class CertificateThread extends AsyncTask<Void, Void, X509Certificate> {

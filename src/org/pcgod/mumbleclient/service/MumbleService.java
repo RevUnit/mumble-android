@@ -24,7 +24,6 @@ import org.pcgod.mumbleclient.service.model.User;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.security.Security;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedList;
@@ -224,19 +223,6 @@ public class MumbleService extends Service {
     }
 
     public void createChannel(Channel channel) {
-//        mProtocol.createChannel(channel);
-
-        /*        @Override
-        public void createChannel(int parent, String name, String description, int position, boolean temporary) throws RemoteException {
-            Mumble.ChannelState.Builder csb = Mumble.ChannelState.newBuilder();
-            csb.setParent(parent);
-            csb.setName(name);
-            csb.setDescription(description);
-            csb.setPosition(position);
-            csb.setTemporary(temporary);
-            mConnection.sendTCPMessage(csb.build(), JumbleTCPMessageType.ChannelState);
-        } */
-
 
         MumbleProto.ChannelState.Builder csb = MumbleProto.ChannelState.newBuilder();
 
