@@ -404,39 +404,28 @@ public class MumbleProtocol {
 
                 MumbleProto.PermissionDenied pd = MumbleProto.PermissionDenied.parseFrom(buffer);
 
-                Log.d("MumbleProtocol", "Permission Denied");
+                Log.d("MumbleProtocol", "Permission Denied: Type=" + pd.getType());
 
-                Log.d("MumbleProtocol", "Type=" + pd.getType());
+                switch (pd.getType()) {
 
-//                if (pd.getType().equals(MumbleProto.PermissionDenied.DenyType.MissingCertificate)) {
-//                    // generate certificate
-//                    FileInputStream fis = ctx.openFileInput(CERTIFICATE);
-//
-//                    certificate = new byte[fis.available()];
-//
-//                    try {
-//                        fis.read(certificate);
-//
-//                        fis.close();
-//
-//                        hasCert = true;
-//                    } catch (IOException e) {
-//                        e.printStackTrace();
-//                    } finally {
-//                        if (fis != null) {
-//                            try {
-//                                fis.close();
-//                            } catch (IOException e) {
-//                                e.printStackTrace();
-//                            }
-//                        }
-//                    }
-//
-//                    if (!hasCert) {
-//                        new CertificateThread().execute();
-//                    }
-//                }
+                    case ChannelName:
+                        Log.w("MumbleProtocol", "Permission denied: duplicate channel name");
+                        break;
+                    default:
 
+                        break;
+                }
+
+                break;
+            case Version:
+                MumbleProto.Version version = MumbleProto.Version.parseFrom(buffer);
+
+                String msg = "version: " + version.getVersion();
+                msg += "   OS: " + version.getOs();
+                msg += "   OS version: " + version.getOsVersion();
+                msg += "   Release: " + version.getRelease();
+
+                Log.v("MumbleProtocol", msg);
 
                 break;
             default:

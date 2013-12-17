@@ -226,7 +226,7 @@ public class MumbleService extends Service {
 
         MumbleProto.ChannelState.Builder csb = MumbleProto.ChannelState.newBuilder();
 
-        csb.setParent(1);
+        csb.setParent(0);
         csb.setName("co-mumble test");
         csb.setDescription("test channel");
         csb.setPosition(3); // test value
@@ -235,7 +235,6 @@ public class MumbleService extends Service {
         Log.d(TAG, "creating channel");
 
         mClient.sendTcpMessage(MumbleProtocol.MessageType.ChannelState, csb);
-
 
     }
 
