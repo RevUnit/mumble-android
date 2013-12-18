@@ -222,10 +222,11 @@ public class MumbleService extends Service {
     public void createChannel(Channel channel) {
 
         MumbleProto.ChannelState.Builder csb = MumbleProto.ChannelState.newBuilder();
+        String description = channel.name + " team channel";
 
         csb.setParent(0);
         csb.setName(channel.name);
-        csb.setDescription("test channel");
+        csb.setDescription(description);
         csb.setPosition(channel.id); // test value
         csb.setTemporary(true);
 
@@ -409,7 +410,7 @@ public class MumbleService extends Service {
     void showNotification() {
         mNotification = new Notification(
                 R.drawable.icon,
-                "Mumble connected",
+                "Comms ready",
                 System.currentTimeMillis());
 
         final Intent channelListIntent = new Intent(
@@ -419,8 +420,8 @@ public class MumbleService extends Service {
                 Intent.FLAG_ACTIVITY_NEW_TASK);
         mNotification.setLatestEventInfo(
                 MumbleService.this,
-                "Mumble",
-                "Mumble is connected to a server",
+                "Overwatch",
+                "Comms ready",
                 PendingIntent.getActivity(
                         MumbleService.this,
                         0,
