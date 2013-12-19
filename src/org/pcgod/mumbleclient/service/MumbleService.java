@@ -418,15 +418,8 @@ public class MumbleService extends Service {
                 ChannelList.class);
         channelListIntent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP).addFlags(
                 Intent.FLAG_ACTIVITY_NEW_TASK);
-        mNotification.setLatestEventInfo(
-                MumbleService.this,
-                "Overwatch",
-                "Comms ready",
-                PendingIntent.getActivity(
-                        MumbleService.this,
-                        0,
-                        channelListIntent,
-                        0));
+        mNotification.setLatestEventInfo(MumbleService.this, "Overwatch", "Comms ready",
+                PendingIntent.getActivity(MumbleService.this, 0, channelListIntent, 0));
         startForegroundCompat(1, mNotification);
     }
 

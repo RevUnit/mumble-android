@@ -135,34 +135,24 @@ public class MumbleProtocol {
 
             certificate = new byte[fis.available()];
 
-            try {
-                fis.read(certificate);
+            fis.read(certificate);
 
-                fis.close();
+            fis.close();
 
-                hasCert = true;
-            } catch (IOException e) {
-                e.printStackTrace();
-            } finally {
-                if (fis != null) {
-                    try {
-                        fis.close();
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
-                }
-            }
+            hasCert = true;
 
-            if (!hasCert) {
-                new CertificateThread().execute();
-            }
+            conn.addCertificate(certificate, null);
+
         } catch (FileNotFoundException e) {
-            e.printStackTrace();
+
+            new CertificateThread().execute();
+
+            conn.addCertificate(certificate, null);
+
+            Log.w("MumbleProtocol", "No certificate found, generating new certificate");
         } catch (IOException e) {
             e.printStackTrace();
         }
-
-        conn.addCertificate(certificate, null);
     }
 
     public final void joinChannel(final int channelId) {
