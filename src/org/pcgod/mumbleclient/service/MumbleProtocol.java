@@ -289,6 +289,7 @@ public class MumbleProtocol {
                     user.session = us.getSession();
                     users.put(user.session, user);
                     added = true;
+
                 }
 
                 if (us.hasSelfDeaf() || us.hasSelfMute()) {
@@ -363,6 +364,23 @@ public class MumbleProtocol {
                     currentChannel = user.getChannel();
                     host.currentChannelChanged();
                 }
+
+                Log.d("MumbleProtocol", "Name: " + us.getName());
+                Log.d("MumbleProtocol", "Channel ID: " + us.getChannelId());
+                Log.d("MumbleProtocol", "Actor: " + us.getActor());
+                Log.d("MumbleProtocol", "Comment: " + us.getComment());
+                Log.d("MumbleProtocol", "Hash: " + us.getHash());
+                Log.d("MumbleProtocol", "Deaf: " + us.getDeaf());
+                Log.d("MumbleProtocol", "SelfDeaf: " + us.getSelfDeaf());
+                Log.d("MumbleProtocol", "Mute: " + us.getMute());
+                Log.d("MumbleProtocol", "SelfMute: " + us.getSelfMute());
+                Log.d("MumbleProtocol", "Plugin Identity: " + us.getPluginIdentity());
+                Log.d("MumbleProtocol", "Plugin Context: " + us.getPluginContext());
+                Log.d("MumbleProtocol", "Session: " + us.getSession());
+                Log.d("MumbleProtocol", "User ID: " + us.getUserId());
+
+
+                // end UserState
                 break;
             case UserRemove:
                 final UserRemove ur = UserRemove.parseFrom(buffer);
@@ -417,6 +435,15 @@ public class MumbleProtocol {
                         Log.w("MumbleProtocol", "Permission denied: duplicate channel name");
 
                         // attempt to join channel
+                        break;
+                    case TemporaryChannel:
+
+                        Log.w("MumbleProtocol", "Permission denied: Temporary channel");
+
+                        Log.w("MumbleProtocol", "Name: " + pd.getName());
+                        Log.w("MumbleProtocol", "Session: " + pd.getSession());
+                        Log.w("MumbleProtocol", "Permission: " + pd.getPermission());
+
                         break;
                     default:
 

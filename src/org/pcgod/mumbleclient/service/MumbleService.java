@@ -274,6 +274,25 @@ public class MumbleService extends Service {
         }
     }
 
+    public void deafen(boolean deafen) {
+        MumbleProto.UserState.Builder usb = MumbleProto.UserState.newBuilder();
+
+        usb.setSession(getCurrentUser().session);
+        usb.setSelfDeaf(deafen);
+
+        Log.d(TAG, "deafen");
+        mClient.sendTcpMessage(MumbleProtocol.MessageType.UserState, usb);
+    }
+
+    public void muteSelf(boolean mute) {
+        MumbleProto.UserState.Builder usb = MumbleProto.UserState.newBuilder();
+        usb.setSession(getCurrentUser().session);
+        usb.setSelfMute(mute);
+
+        Log.d(TAG, "muteSelf");
+        mClient.sendTcpMessage(MumbleProtocol.MessageType.UserState, usb);
+    }
+
     public void muteAll() {
         // TODO: mute all users
         for (User u : users) {
@@ -420,6 +439,7 @@ public class MumbleService extends Service {
                 Intent.FLAG_ACTIVITY_NEW_TASK);
         mNotification.setLatestEventInfo(MumbleService.this, "Overwatch", "Comms ready",
                 PendingIntent.getActivity(MumbleService.this, 0, channelListIntent, 0));
+
         startForegroundCompat(1, mNotification);
     }
 
