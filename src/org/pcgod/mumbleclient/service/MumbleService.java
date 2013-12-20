@@ -101,7 +101,8 @@ public class MumbleService extends Service {
     public IBinder onBind(final Intent intent) {
         Log.i(TAG, "MumbleService: Bound");
 
-        handleCommand(intent);
+//        if (state == CONNECTION_STATE_DISCONNECTED)
+//            handleCommand(intent);
 
         return mBinder;
     }
@@ -143,9 +144,10 @@ public class MumbleService extends Service {
         Log.i(TAG, "MumbleService: Destroyed");
     }
 
+    @Deprecated
     @Override
     public void onStart(final Intent intent, final int startId) {
-        handleCommand(intent);
+//        handleCommand(intent);
     }
 
     @Override
@@ -155,6 +157,8 @@ public class MumbleService extends Service {
             final int startId) {
 
         return handleCommand(intent);
+
+//        return START_STICKY;
     }
 
     public boolean canSpeak() {
@@ -330,7 +334,7 @@ public class MumbleService extends Service {
                 CONNECTION_STATE_NAMES[serviceState]);
     }
 
-    private int handleCommand(final Intent intent) {
+    private synchronized int handleCommand(final Intent intent) {
         // When using START_STICKY the onStartCommand can be called with
         // null intent after the whole service process has been killed.
         // Such scenario doesn't make sense for the service process so
@@ -340,7 +344,7 @@ public class MumbleService extends Service {
         //
         // TODO: Figure out the correct start type.
         if (intent == null) {
-            return START_NOT_STICKY;
+            return START_STICKY;
         }
 
         Log.i(TAG, "MumbleService: Starting service");
@@ -353,7 +357,8 @@ public class MumbleService extends Service {
         if (mClient != null &&
                 state != MumbleConnectionHost.STATE_DISCONNECTED &&
                 mClient.isSameServer(host, port, username, password)) {
-            return START_NOT_STICKY;
+//            return START_NOT_STICKY;
+            return START_STICKY;
         }
 
         doConnectionDisconnect();
@@ -377,7 +382,9 @@ public class MumbleService extends Service {
 
         mClientThread = mClient.start(mProtocol);
 
-        return START_NOT_STICKY;
+        return START_STICKY;
+
+//        return START_NOT_STICKY;
     }
 
     void doConnectionDisconnect() {
@@ -426,14 +433,14 @@ public class MumbleService extends Service {
         channels.clear();
     }
 
-    void hideNotification() {
+    public void hideNotification() {
         if (mNotification != null) {
             stopForegroundCompat(1);
             mNotification = null;
         }
     }
 
-    void showNotification() {
+    public void showNotification() {
         mNotification = new Notification(
                 R.drawable.icon,
                 "Comms ready",
@@ -580,7 +587,7 @@ public class MumbleService extends Service {
 
                     // Handle foreground stuff
                     if (state == MumbleConnectionHost.STATE_CONNECTED) {
-                        showNotification();
+//                        showNotification();
                         updateConnectionState();
                     } else if (state == MumbleConnectionHost.STATE_DISCONNECTED) {
                         doConnectionDisconnect();
