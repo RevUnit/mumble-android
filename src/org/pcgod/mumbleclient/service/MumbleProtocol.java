@@ -224,6 +224,7 @@ public class MumbleProtocol {
                         reject.getReason()));
                 break;
             case ServerSync:
+
                 final ServerSync ss = ServerSync.parseFrom(buffer);
 
                 // We do some things that depend on being executed only once here
@@ -250,6 +251,7 @@ public class MumbleProtocol {
 
                 host.currentChannelChanged();
                 host.currentUserUpdated();
+
                 break;
             case ChannelState:
                 final ChannelState cs = ChannelState.parseFrom(buffer);
@@ -365,21 +367,6 @@ public class MumbleProtocol {
                     host.currentChannelChanged();
                 }
 
-                Log.d("MumbleProtocol", "Name: " + us.getName());
-                Log.d("MumbleProtocol", "Channel ID: " + us.getChannelId());
-                Log.d("MumbleProtocol", "Actor: " + us.getActor());
-                Log.d("MumbleProtocol", "Comment: " + us.getComment());
-                Log.d("MumbleProtocol", "Hash: " + us.getHash());
-                Log.d("MumbleProtocol", "Deaf: " + us.getDeaf());
-                Log.d("MumbleProtocol", "SelfDeaf: " + us.getSelfDeaf());
-                Log.d("MumbleProtocol", "Mute: " + us.getMute());
-                Log.d("MumbleProtocol", "SelfMute: " + us.getSelfMute());
-                Log.d("MumbleProtocol", "Plugin Identity: " + us.getPluginIdentity());
-                Log.d("MumbleProtocol", "Plugin Context: " + us.getPluginContext());
-                Log.d("MumbleProtocol", "Session: " + us.getSession());
-                Log.d("MumbleProtocol", "User ID: " + us.getUserId());
-
-
                 // end UserState
                 break;
             case UserRemove:
@@ -427,7 +414,7 @@ public class MumbleProtocol {
 
                 MumbleProto.PermissionDenied pd = MumbleProto.PermissionDenied.parseFrom(buffer);
 
-                Log.d("MumbleProtocol", "Permission Denied: Type=" + pd.getType());
+                Log.w("MumbleProtocol", "Permission Denied: Type=" + pd.getType());
 
                 switch (pd.getType()) {
 

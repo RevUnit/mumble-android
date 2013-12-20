@@ -1,7 +1,6 @@
 package org.pcgod.mumbleclient.service;
 
 import android.app.Notification;
-import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Intent;
 import android.os.Binder;
@@ -15,7 +14,6 @@ import junit.framework.Assert;
 import net.sf.mumble.MumbleProto;
 
 import org.pcgod.mumbleclient.R;
-import org.pcgod.mumbleclient.app.ChannelList;
 import org.pcgod.mumbleclient.service.audio.AudioOutputHost;
 import org.pcgod.mumbleclient.service.audio.RecordThread;
 import org.pcgod.mumbleclient.service.model.Channel;
@@ -102,6 +100,9 @@ public class MumbleService extends Service {
     @Override
     public IBinder onBind(final Intent intent) {
         Log.i(TAG, "MumbleService: Bound");
+
+        handleCommand(intent);
+
         return mBinder;
     }
 
@@ -132,7 +133,12 @@ public class MumbleService extends Service {
         // Make sure our notification is gone.
         hideNotification();
 
-        disconnect();
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                disconnect();
+            }
+        }).start();
 
         Log.i(TAG, "MumbleService: Destroyed");
     }
@@ -279,6 +285,7 @@ public class MumbleService extends Service {
 
         usb.setSession(getCurrentUser().session);
         usb.setSelfDeaf(deafen);
+        usb.setSelfMute(false);
 
         Log.d(TAG, "deafen");
         mClient.sendTcpMessage(MumbleProtocol.MessageType.UserState, usb);
@@ -432,13 +439,7 @@ public class MumbleService extends Service {
                 "Comms ready",
                 System.currentTimeMillis());
 
-        final Intent channelListIntent = new Intent(
-                MumbleService.this,
-                ChannelList.class);
-        channelListIntent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP).addFlags(
-                Intent.FLAG_ACTIVITY_NEW_TASK);
-        mNotification.setLatestEventInfo(MumbleService.this, "Overwatch", "Comms ready",
-                PendingIntent.getActivity(MumbleService.this, 0, channelListIntent, 0));
+        mNotification.setLatestEventInfo(MumbleService.this, "Overwatch", "Comms ready", null);
 
         startForegroundCompat(1, mNotification);
     }
@@ -520,6 +521,10 @@ public class MumbleService extends Service {
         if (oldState != serviceState) {
             broadcastState();
         }
+    }
+
+    public int getState() {
+        return state;
     }
 
     public class LocalBinder extends Binder {
