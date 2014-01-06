@@ -99,10 +99,8 @@ public class MumbleService extends Service {
     // Service Lifecycle methods
     @Override
     public IBinder onBind(final Intent intent) {
-        Log.i(TAG, "MumbleService: Bound");
-
-//        if (state == CONNECTION_STATE_DISCONNECTED)
-//            handleCommand(intent);
+        Log.i(TAG, "MumbleService: onBind");
+//        handleCommand(intent);
 
         return mBinder;
     }
@@ -110,6 +108,8 @@ public class MumbleService extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
+
+        Log.i(TAG, "onCreate");
 
         try {
             mStartForeground = getClass().getMethod(
@@ -381,6 +381,8 @@ public class MumbleService extends Service {
                 getApplicationContext());
 
         mClientThread = mClient.start(mProtocol);
+
+        Log.d(TAG, "handleCommand finished");
 
         return START_STICKY;
 
