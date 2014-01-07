@@ -96,11 +96,12 @@ public class MumbleService extends Service {
     private ServiceConnectionHost mConnectionHost;
     private ServiceAudioOutputHost mAudioHost;
 
+    boolean started = false;
+
     // Service Lifecycle methods
     @Override
     public IBinder onBind(final Intent intent) {
         Log.i(TAG, "MumbleService: onBind");
-//        handleCommand(intent);
 
         return mBinder;
     }
@@ -156,9 +157,13 @@ public class MumbleService extends Service {
             final int flags,
             final int startId) {
 
-        return handleCommand(intent);
+        int code = START_STICKY;
 
-//        return START_STICKY;
+        if (!started) code = handleCommand(intent);
+
+        started = true;
+
+        return code;
     }
 
     public boolean canSpeak() {
@@ -358,6 +363,9 @@ public class MumbleService extends Service {
                 state != MumbleConnectionHost.STATE_DISCONNECTED &&
                 mClient.isSameServer(host, port, username, password)) {
 //            return START_NOT_STICKY;
+
+            Log.d(TAG, "Mumble not disconnected");
+
             return START_STICKY;
         }
 
