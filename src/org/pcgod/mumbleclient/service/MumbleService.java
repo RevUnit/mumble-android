@@ -123,8 +123,6 @@ public class MumbleService extends Service {
             // Running on an older platform.
             mStartForeground = mStopForeground = null;
         }
-
-        Log.i(TAG, "MumbleService: Created");
         serviceState = CONNECTION_STATE_DISCONNECTED;
     }
 
@@ -866,4 +864,5 @@ public class MumbleService extends Service {
         }
 
     }
+
 }
