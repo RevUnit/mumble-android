@@ -74,6 +74,27 @@ public class MumbleConnection implements Runnable {
         }
 
         @Override
+        public void run() {
+            try {
+                while (isRunning()) {
+                    process();
+                }
+            } catch (final IOException e) {
+                // If we aren't running, exeption is expected
+                if (isRunning()) {
+                    Log.e(Globals.LOG_TAG, "Error reading socket", e);
+                    // restart socket
+                    reconnect();
+                }
+            } finally {
+                setRunning(false);
+                synchronized (getMonitor()) {
+                    getMonitor().notifyAll();
+                }
+            }
+        }
+
+        @Override
         public boolean isRunning() {
             return !disconnecting && super.isRunning();
         }
@@ -180,7 +201,7 @@ public class MumbleConnection implements Runnable {
     private final String password;
 
     private byte[] certificate;
-    private String certificatePassword;
+    private char[] certPassword;
     private boolean hasCertificate;
 
     private final Object stateLock = new Object();
@@ -255,6 +276,12 @@ public class MumbleConnection implements Runnable {
         }
     }
 
+    public void reconnect() {
+        disconnect();
+
+        new Thread(this).start();
+    }
+
     public final boolean isConnectionAlive() {
         return !disconnecting && udpSocket != null && tcpSocket != null &&
                 !tcpSocket.isClosed() && tcpSocket.isConnected() &&
@@ -289,7 +316,7 @@ public class MumbleConnection implements Runnable {
                 this.hostAddress = InetAddress.getByName(host);
 
                 if (protocol.hasCertificate()) {
-                    tcpSocket = connectTcp(protocol.getCertificate(), null);
+                    tcpSocket = connectTcp(protocol.getCertificate(), new char[0]);
                 } else {
                     tcpSocket = connectTcp();
                 }
@@ -569,11 +596,16 @@ public class MumbleConnection implements Runnable {
         Log.e(Globals.LOG_TAG, error, e);
     }
 
-    public Socket connectTcp(byte[] certificate, String certificatePassword) {
+    public Socket connectTcp(byte[] cert, String certificatePassword) {
+        return connectTcp(cert, certificatePassword.toCharArray());
+    }
+
+    protected Socket connectTcp(byte[] certificate, char[] certificatePassword) {
+        this.certificate = certificate;
 
         try {
             /* setup keystore for secure connection */
-            char[] password = certificatePassword != null ? certificatePassword.toCharArray() : new char[0];
+            certPassword = certificatePassword != null ? certificatePassword : new char[0];
 
             SSLContext cntxt = SSLContext.getInstance("TLS");
             KeyStore keyStore = null;
@@ -583,10 +615,10 @@ public class MumbleConnection implements Runnable {
             if (certificate != null) {
                 keyStore = KeyStore.getInstance("PKCS12");
                 ByteArrayInputStream in = new ByteArrayInputStream(certificate);
-                keyStore.load(in, password);
+                keyStore.load(in, certPassword);
             }
 
-            kmf.init(keyStore, password);
+            kmf.init(keyStore, certPassword);
 
             cntxt.init(kmf.getKeyManagers(), new TrustManager[] { new MumbleTrustManager() }, new SecureRandom());
 
@@ -636,7 +668,7 @@ public class MumbleConnection implements Runnable {
 
     public void addCertificate(byte[] certificate, String password) {
         this.certificate = certificate;
-        this.certificatePassword = password;
+        this.certPassword = password != null ? password.toCharArray() : new char[0];
 
         if (certificate.length != 0) {
             hasCertificate = true;
