@@ -60,115 +60,6 @@ public class MumbleConnection implements Runnable {
 
     public static final String TAG = "MumbleConnection";
 
-    /**
-     * Socket reader for the TCP socket. Interprets the Mumble TCP envelope and
-     * extracts the data inside.
-     *
-     * @author Rantanen
-     */
-    class TcpSocketReader extends MumbleSocketReader {
-        private byte[] msg = null;
-
-        public TcpSocketReader(final Object monitor) {
-            super(monitor, "TcpReader");
-        }
-
-        @Override
-        public void run() {
-            try {
-                while (isRunning()) {
-                    process();
-                }
-            } catch (final IOException e) {
-                // If we aren't running, exeption is expected
-                if (isRunning()) {
-                    Log.e(Globals.LOG_TAG, "Error reading socket", e);
-                    // restart socket
-                    reconnect();
-                }
-            } finally {
-                setRunning(false);
-                synchronized (getMonitor()) {
-                    getMonitor().notifyAll();
-                }
-            }
-        }
-
-        @Override
-        public boolean isRunning() {
-            return !disconnecting && super.isRunning();
-        }
-
-        @Override
-        public void stop() {
-            try {
-                tcpSocket.close();
-            } catch (final IOException e) {
-                Log.e(TAG, "Error when closing tcp socket", e);
-            }
-            super.stop();
-        }
-
-        @Override
-        protected void process() throws IOException {
-            final short type = in.readShort();
-            final int length = in.readInt();
-            if (msg == null || msg.length != length) {
-                msg = new byte[length];
-            }
-            in.readFully(msg);
-
-            protocol.processTcp(type, msg);
-        }
-    }
-
-    ;
-
-    /**
-     * Socket reader for the UDP socket. Decrypts the data from the raw UDP
-     * packages.
-     *
-     * @author Rantanen
-     */
-    class UdpSocketReader extends MumbleSocketReader {
-        private final DatagramPacket packet = new DatagramPacket(
-                new byte[UDP_BUFFER_SIZE],
-                UDP_BUFFER_SIZE);
-
-        public UdpSocketReader(final Object monitor) {
-            super(monitor, "UdpReader");
-        }
-
-        @Override
-        public boolean isRunning() {
-            return !disconnecting && super.isRunning();
-        }
-
-        @Override
-        public void stop() {
-            udpSocket.close();
-            super.stop();
-        }
-
-        @Override
-        protected void process() throws IOException {
-            udpSocket.receive(packet);
-
-            final byte[] buffer = cryptState.decrypt(
-                    packet.getData(),
-                    packet.getLength());
-
-            // Decrypt might return null if the buffer was total garbage.
-            if (buffer == null) {
-                return;
-            }
-
-            protocol.processUdp(buffer, buffer.length);
-        }
-    }
-
-    ;
-
     public static final int UDP_BUFFER_SIZE = 2048;
 
     private final MumbleConnectionHost connectionHost;
@@ -202,7 +93,8 @@ public class MumbleConnection implements Runnable {
 
     private byte[] certificate;
     private char[] certPassword;
-    private boolean hasCertificate;
+
+    private boolean restarting = false;
 
     private final Object stateLock = new Object();
     final CryptState cryptState = new CryptState();
@@ -274,12 +166,6 @@ public class MumbleConnection implements Runnable {
             connectionHost.setConnectionState(MumbleConnectionHost.STATE_DISCONNECTED);
             stateLock.notifyAll();
         }
-    }
-
-    public void reconnect() {
-        disconnect();
-
-        new Thread(this).start();
     }
 
     public final boolean isConnectionAlive() {
@@ -550,6 +436,28 @@ public class MumbleConnection implements Runnable {
                 stateLock.wait();
             }
 
+//            while (restart) {
+//                Log.v(TAG, "Restarting...");
+//
+//                tcpReader.stop();
+//
+//                Log.d(TAG, "TCP reader is running? " + tcpReader.isRunning());
+//
+//                if (!tcpReader.isRunning()) {
+//
+//                    Log.d(TAG, "tcpReader.getState=" + tcpReader.getThread().getState());
+////                    tcpReader.getThread().getState();
+//
+//                    if (tcpReader.getThread().getState() != Thread.State.NEW) {
+//                        // refresh the thread
+//                        Log.d(TAG, "tcpReader.restart()");
+//                        tcpReader.restart();
+//                    }
+//                }
+//
+//                restart = false;
+//            }
+
             // Report error if we died without being in a disconnecting state.
             if (!disconnecting) {
                 reportError("Connection lost", null);
@@ -646,7 +554,7 @@ public class MumbleConnection implements Runnable {
             e.printStackTrace();
         }
 
-        Log.wtf(TAG, "TCP/SSL connection not opened");
+        Log.w(TAG, "TCP/SSL connection not opened");
 
         return null;
     }
@@ -669,10 +577,6 @@ public class MumbleConnection implements Runnable {
     public void addCertificate(byte[] certificate, String password) {
         this.certificate = certificate;
         this.certPassword = password != null ? password.toCharArray() : new char[0];
-
-        if (certificate.length != 0) {
-            hasCertificate = true;
-        }
     }
 
     protected DatagramSocket connectUdp() throws SocketException,
@@ -683,6 +587,114 @@ public class MumbleConnection implements Runnable {
         Log.i(Globals.LOG_TAG, "UDP Socket opened");
 
         return udpSocket;
+    }
+
+    public boolean isRestarting() {
+        return restarting;
+    }
+
+    /**
+     * Socket reader for the TCP socket. Interprets the Mumble TCP envelope and
+     * extracts the data inside.
+     *
+     * @author Rantanen
+     */
+    private class TcpSocketReader extends MumbleSocketReader {
+        private byte[] msg = null;
+
+        public TcpSocketReader(final Object monitor) {
+            super(monitor, "TcpReader");
+        }
+
+        @Override
+        public void run() {
+            try {
+                while (isRunning()) {
+                    process();
+                }
+            } catch (final IOException e) {
+                // If we aren't running, exeption is expected
+                if (isRunning()) {
+                    Log.e(Globals.LOG_TAG, "Error reading socket", e);
+                }
+            } finally {
+                restarting = true;
+                setRunning(false);
+                synchronized (getMonitor()) {
+                    getMonitor().notifyAll();
+                }
+            }
+        }
+
+        @Override
+        public boolean isRunning() {
+            return !disconnecting && super.isRunning();
+        }
+
+        @Override
+        public void stop() {
+            try {
+                tcpSocket.close();
+            } catch (final IOException e) {
+                Log.e(TAG, "Error when closing tcp socket", e);
+            }
+            super.stop();
+        }
+
+        @Override
+        protected void process() throws IOException {
+            final short type = in.readShort();
+            final int length = in.readInt();
+            if (msg == null || msg.length != length) {
+                msg = new byte[length];
+            }
+            in.readFully(msg);
+
+            protocol.processTcp(type, msg);
+        }
+    }
+
+    /**
+     * Socket reader for the UDP socket. Decrypts the data from the raw UDP
+     * packages.
+     *
+     * @author Rantanen
+     */
+    private class UdpSocketReader extends MumbleSocketReader {
+        private final DatagramPacket packet = new DatagramPacket(
+                new byte[UDP_BUFFER_SIZE],
+                UDP_BUFFER_SIZE);
+
+        public UdpSocketReader(final Object monitor) {
+            super(monitor, "UdpReader");
+        }
+
+        @Override
+        public boolean isRunning() {
+            return !disconnecting && super.isRunning();
+        }
+
+        @Override
+        public void stop() {
+            udpSocket.close();
+            super.stop();
+        }
+
+        @Override
+        protected void process() throws IOException {
+            udpSocket.receive(packet);
+
+            final byte[] buffer = cryptState.decrypt(
+                    packet.getData(),
+                    packet.getLength());
+
+            // Decrypt might return null if the buffer was total garbage.
+            if (buffer == null) {
+                return;
+            }
+
+            protocol.processUdp(buffer, buffer.length);
+        }
     }
 
     private class MumbleTrustManager implements X509TrustManager {

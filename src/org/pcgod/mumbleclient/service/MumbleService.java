@@ -96,6 +96,12 @@ public class MumbleService extends Service {
     private ServiceConnectionHost mConnectionHost;
     private ServiceAudioOutputHost mAudioHost;
 
+    // connection parameters
+    private String host;
+    private int port;
+    private String username;
+    private String password;
+
     boolean started = false;
 
     // Service Lifecycle methods
@@ -352,15 +358,14 @@ public class MumbleService extends Service {
 
         Log.i(TAG, "MumbleService: Starting service");
 
-        final String host = intent.getStringExtra(EXTRA_HOST);
-        final int port = intent.getIntExtra(EXTRA_PORT, -1);
-        final String username = intent.getStringExtra(EXTRA_USERNAME);
-        final String password = intent.getStringExtra(EXTRA_PASSWORD);
+        host = intent.getStringExtra(EXTRA_HOST);
+        port = intent.getIntExtra(EXTRA_PORT, -1);
+        username = intent.getStringExtra(EXTRA_USERNAME);
+        password = intent.getStringExtra(EXTRA_PASSWORD);
 
         if (mClient != null &&
                 state != MumbleConnectionHost.STATE_DISCONNECTED &&
                 mClient.isSameServer(host, port, username, password)) {
-//            return START_NOT_STICKY;
 
             Log.d(TAG, "Mumble not disconnected");
 
@@ -391,11 +396,25 @@ public class MumbleService extends Service {
         Log.d(TAG, "handleCommand finished");
 
         return START_STICKY;
-
-//        return START_NOT_STICKY;
     }
 
-    void doConnectionDisconnect() {
+    public void reconnect() {
+        Log.v(TAG, "Reconnecting...");
+
+        doConnectionDisconnect();
+
+        mProtocolHost = new ServiceProtocolHost();
+        mConnectionHost = new ServiceConnectionHost();
+        mAudioHost = new ServiceAudioOutputHost();
+
+        mClient = new MumbleConnection(mConnectionHost, host, port, username, password);
+
+        mProtocol = new MumbleProtocol(mProtocolHost, mAudioHost, mClient, getApplicationContext());
+
+        mClientThread = mClient.start(mProtocol);
+    }
+
+    private void doConnectionDisconnect() {
         // First disable all hosts to prevent old callbacks from being processed.
         if (mProtocolHost != null) {
             mProtocolHost.disable();
@@ -540,6 +559,13 @@ public class MumbleService extends Service {
 
     public int getState() {
         return state;
+    }
+
+    public boolean isMumbleConnectionRestarting() {
+        if (mClient != null)
+            return mClient.isRestarting();
+        else
+            return false;
     }
 
     public class LocalBinder extends Binder {

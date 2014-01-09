@@ -14,7 +14,8 @@ import java.io.IOException;
 public abstract class MumbleSocketReader implements Runnable {
     private final Object monitor;
     private boolean running;
-    private final Thread thread;
+    private Thread thread;
+    private String name;
 
     @Override
     public void run() {
@@ -36,28 +37,6 @@ public abstract class MumbleSocketReader implements Runnable {
         }
     }
 
-//	protected Runnable runnable = new Runnable() {
-//		@Override
-//		public void run() {
-//			try {
-//				while (isRunning()) {
-//					process();
-//				}
-//			} catch (final IOException ex) {
-//				// If we aren't running, exception is expected.
-//				if (isRunning()) {
-//					Log.e(Globals.LOG_TAG, "Error reading socket", ex);
-//                    // restart socket
-//				}
-//			} finally {
-//				running = false;
-//				synchronized (monitor) {
-//					monitor.notifyAll();
-//				}
-//			}
-//		}
-//	};
-
     /**
      * Constructs a new Reader instance
      *
@@ -67,6 +46,7 @@ public abstract class MumbleSocketReader implements Runnable {
     public MumbleSocketReader(final Object monitor, final String name) {
         this.monitor = monitor;
         this.running = true;
+        this.name = name;
         this.thread = new Thread(this, name);
     }
 
@@ -87,6 +67,10 @@ public abstract class MumbleSocketReader implements Runnable {
         return monitor;
     }
 
+    public Thread getThread() {
+        return thread;
+    }
+
     public void start() {
         this.thread.start();
     }
@@ -98,6 +82,14 @@ public abstract class MumbleSocketReader implements Runnable {
         } catch (final InterruptedException e) {
             Log.w(Globals.LOG_TAG, e);
         }
+    }
+
+    public void restart() {
+        stop();
+
+        thread = new Thread(this, name);
+
+        thread.start();
     }
 
     /**
