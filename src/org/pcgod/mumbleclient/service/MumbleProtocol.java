@@ -647,8 +647,8 @@ public class MumbleProtocol {
 
         @Override
         public void onPostExecute(X509Certificate result) {
-            Log.d("MumbleProtocol", "Certificate created: ");
-            Log.d("MumbleProtocol", result.toString());
+            Log.v("MumbleProtocol", "Certificate created: ");
+            Log.v("MumbleProtocol", result.toString());
         }
 
         private X509Certificate generateCertificate(OutputStream out) throws NoSuchAlgorithmException, OperatorCreationException, CertificateException, KeyStoreException, IOException {
