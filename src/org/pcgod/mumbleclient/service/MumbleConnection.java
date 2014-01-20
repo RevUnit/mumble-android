@@ -504,12 +504,7 @@ public class MumbleConnection implements Runnable {
         Log.e(Globals.LOG_TAG, error, e);
     }
 
-    public Socket connectTcp(byte[] cert, String certificatePassword) {
-        return connectTcp(cert, certificatePassword.toCharArray());
-    }
-
     protected Socket connectTcp(byte[] certificate, char[] certificatePassword) {
-        this.certificate = certificate;
 
         try {
             /* setup keystore for secure connection */
@@ -519,8 +514,10 @@ public class MumbleConnection implements Runnable {
             KeyStore keyStore = null;
             KeyManagerFactory kmf = KeyManagerFactory.getInstance("X509");
 
-
             if (certificate != null) {
+
+                Log.d(TAG, "certificate.toString(): " + certificate.toString());
+
                 keyStore = KeyStore.getInstance("PKCS12");
                 ByteArrayInputStream in = new ByteArrayInputStream(certificate);
                 keyStore.load(in, certPassword);
@@ -574,10 +571,6 @@ public class MumbleConnection implements Runnable {
         return sslSocket;
     }
 
-    public void addCertificate(byte[] certificate, String password) {
-        this.certificate = certificate;
-        this.certPassword = password != null ? password.toCharArray() : new char[0];
-    }
 
     protected DatagramSocket connectUdp() throws SocketException,
             UnknownHostException {

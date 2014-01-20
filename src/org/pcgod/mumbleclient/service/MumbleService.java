@@ -58,6 +58,7 @@ public class MumbleService extends Service {
     public static final String EXTRA_PORT = "mumbleclient.extra.PORT";
     public static final String EXTRA_USERNAME = "mumbleclient.extra.USERNAME";
     public static final String EXTRA_PASSWORD = "mumbleclient.extra.PASSWORD";
+    public static final String EXTRA_CERTIFICATE = "mumbleclient.extra.CERTIFICATE";
     public static final String EXTRA_USER = "mumbleclient.extra.USER";
 
     private MumbleConnection mClient;
@@ -101,6 +102,7 @@ public class MumbleService extends Service {
     private int port;
     private String username;
     private String password;
+    private byte[] certificate;
 
     boolean started = false;
 
@@ -362,6 +364,7 @@ public class MumbleService extends Service {
         port = intent.getIntExtra(EXTRA_PORT, -1);
         username = intent.getStringExtra(EXTRA_USERNAME);
         password = intent.getStringExtra(EXTRA_PASSWORD);
+        certificate = intent.getByteArrayExtra(EXTRA_CERTIFICATE);
 
         if (mClient != null &&
                 state != MumbleConnectionHost.STATE_DISCONNECTED &&
