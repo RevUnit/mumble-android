@@ -93,6 +93,7 @@ public class MumbleConnection implements Runnable {
 
     private byte[] certificate;
     private char[] certPassword;
+    private boolean secure = false;
 
     private boolean restarting = false;
 
@@ -134,8 +135,14 @@ public class MumbleConnection implements Runnable {
 
     public MumbleConnection(MumbleConnectionHost connectionHost, String host, int port,
                             String username, String password, byte[] certificate,
-                            String certificatePassword) {
+                            char[] certPassword) {
         this(connectionHost, host, port, username, password);
+
+        this.certificate = certificate;
+        this.certPassword = certPassword;
+
+        if (certificate != null)
+            secure = true;
     }
 
     public final void disconnect() {
@@ -201,8 +208,8 @@ public class MumbleConnection implements Runnable {
 
                 this.hostAddress = InetAddress.getByName(host);
 
-                if (protocol.hasCertificate()) {
-                    tcpSocket = connectTcp(protocol.getCertificate(), new char[0]);
+                if (secure) {
+                    tcpSocket = connectTcp(certificate, new char[0]);
                 } else {
                     tcpSocket = connectTcp();
                 }

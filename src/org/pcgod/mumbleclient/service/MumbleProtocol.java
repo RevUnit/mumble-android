@@ -76,9 +76,7 @@ public class MumbleProtocol {
     private AudioOutput ao;
     private Thread audioOutputThread;
     private Thread pingThread;
-    private byte[] certificate;
     private boolean stopped = false;
-    private boolean hasCert = false;
 
     public MumbleProtocol(
             final MumbleProtocolHost host,
@@ -547,14 +545,6 @@ public class MumbleProtocol {
                         e);
             }
         }
-    }
-
-    public boolean hasCertificate() {
-        return hasCert;
-    }
-
-    public byte[] getCertificate() {
-        return certificate;
     }
 
     public enum MessageType {

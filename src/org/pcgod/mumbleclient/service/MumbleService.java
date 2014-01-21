@@ -364,7 +364,7 @@ public class MumbleService extends Service {
         port = intent.getIntExtra(EXTRA_PORT, -1);
         username = intent.getStringExtra(EXTRA_USERNAME);
         password = intent.getStringExtra(EXTRA_PASSWORD);
-        certificate = intent.getByteArrayExtra(EXTRA_CERTIFICATE);
+//        certificate = intent.getByteArrayExtra(EXTRA_CERTIFICATE);
 
         if (mClient != null &&
                 state != MumbleConnectionHost.STATE_DISCONNECTED &&
@@ -386,7 +386,9 @@ public class MumbleService extends Service {
                 host,
                 port,
                 username,
-                password);
+                password,
+                intent.getByteArrayExtra(EXTRA_CERTIFICATE),
+                new char[0]);
 
         mProtocol = new MumbleProtocol(
                 mProtocolHost,
