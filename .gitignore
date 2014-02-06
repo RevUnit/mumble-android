@@ -4,3 +4,9 @@ build/*
 obj/*
 out/*
 gen/*
+
+# Intellij project files
+*.iml
+*.ipr
+*.iws
+.idea/
