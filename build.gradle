@@ -13,10 +13,10 @@ repositories {
 }
 
 dependencies {
-    compile files('libs/protobuf-java-2.3.0-lite.jar')
     compile files('libs/hawtjni-runtime-1.1-SNAPSHOT.jar')
     compile files('libs/lib.jar')
 
+    compile "com.google.protobuf:protobuf-java:2.5.0"
     compile "com.madgag:sc-light-jdk15on:1.47.0.3"
     compile "com.madgag:scpkix-jdk15on:1.47.0.3"
     compile "com.madgag:scprov-jdk15on:1.47.0.3"
